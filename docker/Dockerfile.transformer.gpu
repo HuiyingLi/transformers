@@ -1,0 +1,6 @@
+FROM tensorflow/tensorflow:2.0.0-gpu-py3
+
+RUN pip install torch torchvision seqeval 
+#version sensitive for fastprogress, 0.2.0+ won't work, 0.1.15 won't work either
+RUN pip install fastprogress==0.1.22
+RUN apt-get install -y wget vim
