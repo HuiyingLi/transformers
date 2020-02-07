@@ -93,6 +93,8 @@ flags.DEFINE_boolean("do_eval", False, "Whether to run eval on the dev set.")
 
 flags.DEFINE_boolean("do_predict", False, "Whether to run predictions on the test set.")
 
+flags.DEFINE_boolean("do_inference", False, "Whether to run inference only (no evaluation) on test set")
+
 flags.DEFINE_boolean(
     "evaluate_during_training", False, "Whether to run evaluation during training at each logging step."
 )
@@ -645,6 +647,33 @@ def main(_):
                         writer.write(output_line)
                     else:
                         logging.warning("Maximum sequence length exceeded: No prediction for '%s'.", line.split()[0])
+
+    if args['do_inference']:
+        tokenizer = tokenizer_class.from_pretrained(args["output_dir"], do_lower_case=args["do_lower_case"])
+        model = model_class.from_pretrained(args["output_dir"])
+        eval_batch_size = args["per_device_eval_batch_size"] * args["n_device"]
+        predict_dataset, _ = load_and_cache_examples(
+            args, tokenizer, labels, pad_token_label_id, eval_batch_size, mode="test"
+        )
+        y_true, y_pred, pred_loss = evaluate(args, strategy, model, tokenizer, labels, pad_token_label_id, mode="test")
+        output_test_predictions_file = os.path.join(args["output_dir"], "test_predictions.txt")
+
+        with tf.io.gfile.GFile(output_test_predictions_file, "w") as writer:
+            with tf.io.gfile.GFile(os.path.join(args["data_dir"], "test.txt"), "r") as f:
+                example_id = 0
+
+                for line in f:
+                    if line.startswith("-DOCSTART-") or line == "" or line == "\n":
+                        writer.write(line)
+
+                        if not y_pred[example_id]:
+                            example_id += 1
+                    elif y_pred[example_id]:
+                        output_line = line.split()[0] + " " + y_pred[example_id].pop(0) + "\n"
+                        writer.write(output_line)
+                    else:
+                        logging.warning("Maximum sequence length exceeded: No prediction for '%s'.", line.split()[0])
+
 
 
 if __name__ == "__main__":
